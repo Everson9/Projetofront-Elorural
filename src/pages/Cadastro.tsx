@@ -95,7 +95,7 @@ const Cadastro = () => {
     try {
       console.log("Enviando payload:", payload);
 
-      const response = await fetch("https://elo-rural-backend.onrender.com/register", {
+      const response = await fetch("https://elo-rural-backend.onrender.com/api/admin/register", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
