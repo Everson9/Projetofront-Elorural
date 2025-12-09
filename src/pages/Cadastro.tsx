@@ -3,24 +3,48 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Power, User, Lock, Eye, EyeOff, Mail, Building, MapPin, Phone, ArrowLeft } from "lucide-react";
+import { 
+  Power, User, Lock, Eye, EyeOff, Mail, 
+  Phone, ArrowLeft, Loader2, FileText, Warehouse 
+} from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
+
+// --- Funções Auxiliares de Máscara ---
+
+// Máscara de CPF: 000.000.000-00
+const formatCPF = (value: string) => {
+  return value
+    .replace(/\D/g, '') // Remove não números
+    .replace(/(\d{3})(\d)/, '$1.$2') // Ponto após 3º dígito
+    .replace(/(\d{3})(\d)/, '$1.$2') // Ponto após 6º dígito
+    .replace(/(\d{3})(\d{1,2})/, '$1-$2') // Hífen antes dos últimos 2
+    .slice(0, 14); // Limita tamanho
+}
+
+// Máscara de Telefone
+const formatPhone = (value: string) => {
+  return value
+    .replace(/\D/g, '')
+    .replace(/^(\d{2})(\d)/, '($1) $2')
+    .replace(/(\d{5})(\d)/, '$1-$2')
+    .slice(0, 15);
+}
+
+// --- Schemas de Validação ---
 
 const signupStep1Schema = z.object({
   username: z.string().min(3, "Usuário deve ter no mínimo 3 caracteres"),
   email: z.string().email("Email inválido"),
   password: z.string().min(6, "Senha deve ter no mínimo 6 caracteres"),
-  cnpj: z.string().min(14, "CNPJ inválido"),
-  city: z.string().min(2, "Cidade inválida"),
+  // Valida tamanho 14 considerando a pontuação: 000.000.000-00
+  cpf: z.string().min(14, "CPF incompleto"), 
 });
 
 const signupStep2Schema = z.object({
-  role: z.string().min(2, "Campo obrigatório"),
-  company: z.string().min(2, "Campo obrigatório"),
-  unit: z.string().min(2, "Campo obrigatório"),
-  phone: z.string().min(10, "Telefone inválido"),
+  unit: z.string().min(2, "Campo obrigatório"), // Será o armazemResponsavel
+  phone: z.string().min(14, "Telefone inválido"), 
 });
 
 type SignupStep1Form = z.infer<typeof signupStep1Schema>;
@@ -30,10 +54,15 @@ const Cadastro = () => {
   const [step, setStep] = useState<1 | 2>(1);
   const [showPassword, setShowPassword] = useState(false);
   const [signupData, setSignupData] = useState<Partial<SignupStep1Form>>({});
+  
+  const [loading, setLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
+  
   const navigate = useNavigate();
 
   const signupStep1Form = useForm<SignupStep1Form>({
     resolver: zodResolver(signupStep1Schema),
+    mode: "onChange"
   });
 
   const signupStep2Form = useForm<SignupStep2Form>({
@@ -43,62 +72,106 @@ const Cadastro = () => {
   const onSignupStep1 = (data: SignupStep1Form) => {
     setSignupData(data);
     setStep(2);
+    setErrorMessage("");
   };
 
-  const onSignupStep2 = (data: SignupStep2Form) => {
-    console.log("Cadastro completo:", { ...signupData, ...data });
-    // Implementar lógica de cadastro e redirecionar
-    navigate("/dashboard");
+  // --- ENVIAR PARA API ---
+  const onSignupStep2 = async (data: SignupStep2Form) => {
+    setLoading(true);
+    setErrorMessage("");
+
+    const completeData = { ...signupData, ...data };
+
+    // Constrói o objeto EXATAMENTE como o DTO Kotlin pede
+    const payload = {
+      username: completeData.username,
+      cpf: completeData.cpf?.replace(/\D/g, ''), // Envia CPF limpo (só números)
+      email: completeData.email,
+      password: completeData.password,
+      telefone: completeData.phone?.replace(/\D/g, ''), // Envia telefone limpo
+      armazemResponsavel: completeData.unit // Mapeia 'unit' do front para 'armazemResponsavel' do back
+    };
+
+    try {
+      console.log("Enviando payload:", payload);
+
+      const response = await fetch("https://elo-rural-backend.onrender.com/register", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        const err = await response.json().catch(() => null);
+        throw new Error(err?.message ?? "Falha ao realizar cadastro");
+      }
+
+      console.log("Cadastro Sucesso!");
+      navigate("/login");
+
+    } catch (err: any) {
+      console.error("Erro API:", err);
+      setErrorMessage(err.message || "Erro inesperado.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-sage-light via-sage to-sage-dark flex items-center justify-center p-4">
       <div className="w-full max-w-md">
+        
+        {/* Header */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-primary mb-4">
-            <Power className="w-12 h-12 text-white" />
+          <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-primary mb-4 shadow-lg">
+            <Power className="w-10 h-10 text-white" />
           </div>
+          <h2 className="text-2xl font-bold text-sage-dark mb-1">Criar Conta</h2>
           <p className="text-sage-dark/80 text-sm font-medium">
             Sistema de Rastreabilidade de Sementes
           </p>
         </div>
 
-        <div className="bg-white rounded-lg shadow-xl p-8">
+        <div className="bg-white rounded-xl shadow-2xl p-8 border border-gray-100">
           {step === 1 ? (
             <>
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={() => navigate("/")}
-                className="mb-4"
+                className="mb-6 -ml-2 text-muted-foreground hover:text-primary"
               >
                 <ArrowLeft className="w-4 h-4 mr-2" />
-                Voltar ao início
+                Voltar
               </Button>
-              <h1 className="text-2xl font-bold text-center mb-2">Criar Conta</h1>
-              <p className="text-center text-muted-foreground text-sm mb-6">
-                Preencha seus dados para começar
-              </p>
+              
+              <div className="mb-6">
+                <h1 className="text-xl font-bold text-gray-900">Dados Pessoais</h1>
+                <p className="text-muted-foreground text-sm">Passo 1 de 2</p>
+              </div>
 
               <form onSubmit={signupStep1Form.handleSubmit(onSignupStep1)} className="space-y-4">
+                
+                {/* Username */}
                 <div>
                   <Label htmlFor="username">Nome de Usuário</Label>
                   <div className="relative mt-1">
                     <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                     <Input
                       id="username"
-                      placeholder="Digite seu nome de usuário"
+                      placeholder="Ex: joaosilva"
                       className="pl-10"
                       {...signupStep1Form.register("username")}
                     />
                   </div>
                   {signupStep1Form.formState.errors.username && (
-                    <p className="text-sm text-destructive mt-1">
-                      {signupStep1Form.formState.errors.username.message}
-                    </p>
+                    <p className="text-xs text-destructive mt-1">{signupStep1Form.formState.errors.username.message}</p>
                   )}
                 </div>
 
+                {/* Email */}
                 <div>
                   <Label htmlFor="email">Email</Label>
                   <div className="relative mt-1">
@@ -112,12 +185,11 @@ const Cadastro = () => {
                     />
                   </div>
                   {signupStep1Form.formState.errors.email && (
-                    <p className="text-sm text-destructive mt-1">
-                      {signupStep1Form.formState.errors.email.message}
-                    </p>
+                    <p className="text-xs text-destructive mt-1">{signupStep1Form.formState.errors.email.message}</p>
                   )}
                 </div>
 
+                {/* Senha */}
                 <div>
                   <Label htmlFor="password">Senha</Label>
                   <div className="relative mt-1">
@@ -125,73 +197,52 @@ const Cadastro = () => {
                     <Input
                       id="password"
                       type={showPassword ? "text" : "password"}
-                      placeholder="Digite sua senha"
+                      placeholder="******"
                       className="pl-10 pr-10"
                       {...signupStep1Form.register("password")}
                     />
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
                     >
                       {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
                   </div>
                   {signupStep1Form.formState.errors.password && (
-                    <p className="text-sm text-destructive mt-1">
-                      {signupStep1Form.formState.errors.password.message}
-                    </p>
+                    <p className="text-xs text-destructive mt-1">{signupStep1Form.formState.errors.password.message}</p>
                   )}
                 </div>
 
+                {/* CPF (Substituindo o antigo CNPJ) */}
                 <div>
-                  <Label htmlFor="cnpj">CNPJ</Label>
+                  <Label htmlFor="cpf">CPF</Label>
                   <div className="relative mt-1">
-                    <Building className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <FileText className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                     <Input
-                      id="cnpj"
-                      placeholder="00.000.000/0000-00"
+                      id="cpf"
+                      placeholder="000.000.000-00"
                       className="pl-10"
-                      {...signupStep1Form.register("cnpj")}
+                      maxLength={14}
+                      {...signupStep1Form.register("cpf", {
+                        onChange: (e) => e.target.value = formatCPF(e.target.value)
+                      })}
                     />
                   </div>
-                  {signupStep1Form.formState.errors.cnpj && (
-                    <p className="text-sm text-destructive mt-1">
-                      {signupStep1Form.formState.errors.cnpj.message}
-                    </p>
+                  {signupStep1Form.formState.errors.cpf && (
+                    <p className="text-xs text-destructive mt-1">{signupStep1Form.formState.errors.cpf.message}</p>
                   )}
                 </div>
 
-                <div>
-                  <Label htmlFor="city">Cidade</Label>
-                  <div className="relative mt-1">
-                    <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                    <Input
-                      id="city"
-                      placeholder="Digite sua cidade"
-                      className="pl-10"
-                      {...signupStep1Form.register("city")}
-                    />
-                  </div>
-                  {signupStep1Form.formState.errors.city && (
-                    <p className="text-sm text-destructive mt-1">
-                      {signupStep1Form.formState.errors.city.message}
-                    </p>
-                  )}
-                </div>
-
-                <Button type="submit" className="w-full bg-[#8B7355] hover:bg-[#7A6349]">
+                <Button type="submit" className="w-full bg-[#8B7355] hover:bg-[#7A6349] mt-2">
                   Continuar
                 </Button>
               </form>
-
-              <div className="mt-6 text-center">
-                <p className="text-sm text-muted-foreground">
-                  Já tem uma conta?{" "}
-                  <button
-                    onClick={() => navigate("/login")}
-                    className="text-primary hover:underline font-medium"
-                  >
+              
+              <div className="mt-6 text-center border-t pt-4">
+                <p className="text-xs text-muted-foreground">
+                  Já possui conta?{" "}
+                  <button onClick={() => navigate("/login")} className="text-primary hover:underline font-bold">
                     Fazer Login
                   </button>
                 </p>
@@ -199,54 +250,31 @@ const Cadastro = () => {
             </>
           ) : (
             <>
-              <h1 className="text-2xl font-bold text-center mb-2">Informações Adicionais</h1>
-              <p className="text-center text-muted-foreground text-sm mb-6">
-                Complete seu cadastro
-              </p>
+              <div className="mb-6">
+                <h1 className="text-xl font-bold text-gray-900">Vínculo</h1>
+                <p className="text-muted-foreground text-sm">Passo 2 de 2</p>
+              </div>
 
               <form onSubmit={signupStep2Form.handleSubmit(onSignupStep2)} className="space-y-4">
+                
+                {/* Armazém Responsável (Antigo Unidade) */}
                 <div>
-                  <Label htmlFor="role">Cargo</Label>
-                  <Input
-                    id="role"
-                    placeholder="Ex: Gerente"
-                    {...signupStep2Form.register("role")}
-                  />
-                  {signupStep2Form.formState.errors.role && (
-                    <p className="text-sm text-destructive mt-1">
-                      {signupStep2Form.formState.errors.role.message}
-                    </p>
-                  )}
-                </div>
-
-                <div>
-                  <Label htmlFor="company">Empresa</Label>
-                  <Input
-                    id="company"
-                    placeholder="Nome da empresa"
-                    {...signupStep2Form.register("company")}
-                  />
-                  {signupStep2Form.formState.errors.company && (
-                    <p className="text-sm text-destructive mt-1">
-                      {signupStep2Form.formState.errors.company.message}
-                    </p>
-                  )}
-                </div>
-
-                <div>
-                  <Label htmlFor="unit">Unidade</Label>
-                  <Input
-                    id="unit"
-                    placeholder="Unidade/Filial"
-                    {...signupStep2Form.register("unit")}
-                  />
+                  <Label htmlFor="unit">Armazém Responsável</Label>
+                  <div className="relative mt-1">
+                    <Warehouse className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input
+                      id="unit"
+                      placeholder="Ex: Armazém Central"
+                      className="pl-10"
+                      {...signupStep2Form.register("unit")}
+                    />
+                  </div>
                   {signupStep2Form.formState.errors.unit && (
-                    <p className="text-sm text-destructive mt-1">
-                      {signupStep2Form.formState.errors.unit.message}
-                    </p>
+                    <p className="text-xs text-destructive mt-1">{signupStep2Form.formState.errors.unit.message}</p>
                   )}
                 </div>
 
+                {/* Telefone */}
                 <div>
                   <Label htmlFor="phone">Telefone</Label>
                   <div className="relative mt-1">
@@ -255,27 +283,47 @@ const Cadastro = () => {
                       id="phone"
                       placeholder="(00) 00000-0000"
                       className="pl-10"
-                      {...signupStep2Form.register("phone")}
+                      maxLength={15}
+                      {...signupStep2Form.register("phone", {
+                        onChange: (e) => e.target.value = formatPhone(e.target.value)
+                      })}
                     />
                   </div>
                   {signupStep2Form.formState.errors.phone && (
-                    <p className="text-sm text-destructive mt-1">
-                      {signupStep2Form.formState.errors.phone.message}
-                    </p>
+                    <p className="text-xs text-destructive mt-1">{signupStep2Form.formState.errors.phone.message}</p>
                   )}
                 </div>
 
-                <div className="flex gap-3">
+                {errorMessage && (
+                  <div className="bg-destructive/15 p-3 rounded-md text-center">
+                    <p className="text-xs text-destructive font-semibold">{errorMessage}</p>
+                  </div>
+                )}
+
+                <div className="flex gap-3 pt-4">
                   <Button
                     type="button"
                     variant="outline"
                     className="flex-1"
                     onClick={() => setStep(1)}
+                    disabled={loading}
                   >
                     Voltar
                   </Button>
-                  <Button type="submit" className="flex-1 bg-[#8B7355] hover:bg-[#7A6349]">
-                    Finalizar Cadastro
+                  
+                  <Button 
+                    type="submit" 
+                    className="flex-1 bg-[#8B7355] hover:bg-[#7A6349]"
+                    disabled={loading}
+                  >
+                    {loading ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Salvando...
+                      </>
+                    ) : (
+                      "Finalizar"
+                    )}
                   </Button>
                 </div>
               </form>
