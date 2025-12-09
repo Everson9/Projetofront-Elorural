@@ -43,7 +43,7 @@ export default function Configuracoes() {
             {/* Botão de Login (Link) */}
             <div className="flex gap-2">
               <Button variant="default" size="sm" asChild>
-                <Link to="/cadastrar">Cadastrar Produção</Link>
+                <Link to="/cadastro">Cadastrar Produção</Link>
               </Button>
             </div>
           </div>
