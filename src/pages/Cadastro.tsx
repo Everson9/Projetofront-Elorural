@@ -16,14 +16,14 @@ import * as z from "zod";
 // Máscara de CPF: 000.000.000-00
 const formatCPF = (value: string) => {
   return value
-    .replace(/\D/g, '') // Remove não números
-    .replace(/(\d{3})(\d)/, '$1.$2') // Ponto após 3º dígito
-    .replace(/(\d{3})(\d)/, '$1.$2') // Ponto após 6º dígito
-    .replace(/(\d{3})(\d{1,2})/, '$1-$2') // Hífen antes dos últimos 2
-    .slice(0, 14); // Limita tamanho
+    .replace(/\D/g, '') 
+    .replace(/(\d{3})(\d)/, '$1.$2') 
+    .replace(/(\d{3})(\d)/, '$1.$2') 
+    .replace(/(\d{3})(\d{1,2})/, '$1-$2') 
+    .slice(0, 14); 
 }
 
-// Máscara de Telefone
+// Máscara de Telefone: (00) 00000-0000
 const formatPhone = (value: string) => {
   return value
     .replace(/\D/g, '')
@@ -38,13 +38,12 @@ const signupStep1Schema = z.object({
   username: z.string().min(3, "Usuário deve ter no mínimo 3 caracteres"),
   email: z.string().email("Email inválido"),
   password: z.string().min(6, "Senha deve ter no mínimo 6 caracteres"),
-  // Valida tamanho 14 considerando a pontuação: 000.000.000-00
   cpf: z.string().min(14, "CPF incompleto"), 
+  phone: z.string().min(14, "Telefone inválido"), // <--- MOVIDO PARA O PASSO 1
 });
 
 const signupStep2Schema = z.object({
-  unit: z.string().min(2, "Campo obrigatório"), // Será o armazemResponsavel
-  phone: z.string().min(14, "Telefone inválido"), 
+  unit: z.string().min(2, "Campo obrigatório"), // Armazém
 });
 
 type SignupStep1Form = z.infer<typeof signupStep1Schema>;
@@ -80,16 +79,17 @@ const Cadastro = () => {
     setLoading(true);
     setErrorMessage("");
 
+    // Junta os dados acumulados
     const completeData = { ...signupData, ...data };
 
     // Constrói o objeto EXATAMENTE como o DTO Kotlin pede
     const payload = {
       username: completeData.username,
-      cpf: completeData.cpf?.replace(/\D/g, ''), // Envia CPF limpo (só números)
+      cpf: completeData.cpf?.replace(/\D/g, ''), // Limpa CPF
       email: completeData.email,
       password: completeData.password,
-      telefone: completeData.phone?.replace(/\D/g, ''), // Envia telefone limpo
-      armazemResponsavel: completeData.unit // Mapeia 'unit' do front para 'armazemResponsavel' do back
+      telefone: completeData.phone?.replace(/\D/g, ''), // Limpa Telefone
+      armazemResponsavel: completeData.unit // Mapeia Armazém
     };
 
     try {
@@ -123,7 +123,6 @@ const Cadastro = () => {
     <div className="min-h-screen bg-gradient-to-br from-sage-light via-sage to-sage-dark flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         
-        {/* Header */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-primary mb-4 shadow-lg">
             <Power className="w-10 h-10 text-white" />
@@ -140,7 +139,7 @@ const Cadastro = () => {
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => navigate("/")}
+                onClick={() => navigate("/dashboard")}
                 className="mb-6 -ml-2 text-muted-foreground hover:text-primary"
               >
                 <ArrowLeft className="w-4 h-4 mr-2" />
@@ -214,7 +213,7 @@ const Cadastro = () => {
                   )}
                 </div>
 
-                {/* CPF (Substituindo o antigo CNPJ) */}
+                {/* CPF */}
                 <div>
                   <Label htmlFor="cpf">CPF</Label>
                   <div className="relative mt-1">
@@ -231,6 +230,26 @@ const Cadastro = () => {
                   </div>
                   {signupStep1Form.formState.errors.cpf && (
                     <p className="text-xs text-destructive mt-1">{signupStep1Form.formState.errors.cpf.message}</p>
+                  )}
+                </div>
+
+                {/* Telefone (AGORA NO PASSO 1) */}
+                <div>
+                  <Label htmlFor="phone">Telefone</Label>
+                  <div className="relative mt-1">
+                    <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input
+                      id="phone"
+                      placeholder="(00) 00000-0000"
+                      className="pl-10"
+                      maxLength={15}
+                      {...signupStep1Form.register("phone", {
+                        onChange: (e) => e.target.value = formatPhone(e.target.value)
+                      })}
+                    />
+                  </div>
+                  {signupStep1Form.formState.errors.phone && (
+                    <p className="text-xs text-destructive mt-1">{signupStep1Form.formState.errors.phone.message}</p>
                   )}
                 </div>
 
@@ -257,40 +276,20 @@ const Cadastro = () => {
 
               <form onSubmit={signupStep2Form.handleSubmit(onSignupStep2)} className="space-y-4">
                 
-                {/* Armazém Responsável (Antigo Unidade) */}
+                {/* Armazém Responsável (Vínculo) */}
                 <div>
                   <Label htmlFor="unit">Armazém Responsável</Label>
                   <div className="relative mt-1">
                     <Warehouse className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                     <Input
                       id="unit"
-                      placeholder="Ex: Armazém Central"
+                      placeholder="Ex: Armazém Central - Recife"
                       className="pl-10"
                       {...signupStep2Form.register("unit")}
                     />
                   </div>
                   {signupStep2Form.formState.errors.unit && (
                     <p className="text-xs text-destructive mt-1">{signupStep2Form.formState.errors.unit.message}</p>
-                  )}
-                </div>
-
-                {/* Telefone */}
-                <div>
-                  <Label htmlFor="phone">Telefone</Label>
-                  <div className="relative mt-1">
-                    <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                    <Input
-                      id="phone"
-                      placeholder="(00) 00000-0000"
-                      className="pl-10"
-                      maxLength={15}
-                      {...signupStep2Form.register("phone", {
-                        onChange: (e) => e.target.value = formatPhone(e.target.value)
-                      })}
-                    />
-                  </div>
-                  {signupStep2Form.formState.errors.phone && (
-                    <p className="text-xs text-destructive mt-1">{signupStep2Form.formState.errors.phone.message}</p>
                   )}
                 </div>
 
