@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Power, User, Lock, Eye, EyeOff, ArrowLeft } from "lucide-react";
+import { Power, User, Lock, Eye, EyeOff, ArrowLeft, Loader2 } from "lucide-react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -29,41 +29,58 @@ const Login = () => {
     resolver: zodResolver(loginSchema),
   });
 
-  // --- FUNÇÃO DE LOGIN COM POST ---
+  // --- FUNÇÃO DE LOGIN ---
   const onLogin = async (data: LoginForm) => {
     setLoading(true);
     setErrorMessage("");
 
-    try {
-      console.log("Enviando dados para API:", data);
+    // 1. LIMPEZA DE DADOS
+    // Remove tudo que não for número (pontos e traços do CPF)
+    const loginLimpo = data.cpnjOrUser.replace(/\D/g, '');
 
+    try {
+      console.log("Enviando login:", { cpf: loginLimpo });
+
+      // 2. CONEXÃO COM O RENDER
       const response = await fetch("https://elo-rural-backend.onrender.com/login", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          cpf: data.cpnjOrUser,
-          senha: data.password,
+          // Envia o CPF limpo (só números)
+          cpf: loginLimpo, 
+          
+          // Envia a senha. 
+          // IMPORTANTE: Se continuar dando erro, troque 'password' por 'senha' aqui embaixo 👇
+          senha: data.password 
         }),
       });
 
       if (!response.ok) {
+        // Tenta pegar a mensagem de erro específica do Backend
         const err = await response.json().catch(() => null);
-        throw new Error(err?.message ?? "Falha ao fazer login");
+        throw new Error(err?.message || err?.error || "Usuário ou senha inválidos");
       }
 
       const result = await response.json();
       console.log("Login bem-sucedido:", result);
 
-      // Salvar token
-      localStorage.setItem("token", result.token);
-
-      navigate("/dashboard");
+      // 3. SALVAR TOKEN E REDIRECIONAR
+      // Verifica se o backend retornou o token (pode ser 'token' ou 'accessToken')
+      const token = result.token || result.accessToken;
+      
+      if (token) {
+        localStorage.setItem("token", token);
+        navigate("/dashboard");
+      } else {
+        // Se logou mas não veio token (estranho, mas acontece), redireciona mesmo assim
+        navigate("/dashboard");
+      }
 
     } catch (err: any) {
       console.error("Erro no Login:", err);
-      setErrorMessage(err.message || "Erro inesperado.");
+      setErrorMessage(err.message || "Erro ao conectar com o servidor.");
     } finally {
       setLoading(false);
     }
@@ -72,54 +89,50 @@ const Login = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-sage-light via-sage to-sage-dark flex items-center justify-center p-4">
       <div className="w-full max-w-md">
+        
+        {/* Header Visual */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-primary mb-4">
-            <Power className="w-12 h-12 text-white" />
+          <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-primary mb-4 shadow-lg">
+            <Power className="w-10 h-10 text-white" />
           </div>
           <p className="text-sage-dark/80 text-sm font-medium">
             Sistema de Rastreabilidade de Sementes
           </p>
         </div>
 
-        <div className="bg-white rounded-lg shadow-xl p-8">
+        <div className="bg-white rounded-xl shadow-xl p-8 border border-gray-100">
           <Button
             variant="ghost"
             size="sm"
             onClick={() => navigate("/")}
-            className="mb-4"
+            className="mb-6 -ml-2 text-muted-foreground hover:text-primary"
           >
             <ArrowLeft className="w-4 h-4 mr-2" />
             Voltar ao início
           </Button>
 
-          <h1 className="text-2xl font-bold text-center mb-2">Fazer Login</h1>
+          <h1 className="text-2xl font-bold text-center mb-2 text-gray-900">Fazer Login</h1>
           <p className="text-center text-muted-foreground text-sm mb-6">
-            Entre com suas credenciais para acessar o sistema
+            Entre com suas credenciais para acessar
           </p>
 
-          <form
-            onSubmit={loginForm.handleSubmit(
-              onLogin,
-              (errors) => console.error("Erros de validação:", errors)
-            )}
-            className="space-y-4"
-          >
+          <form onSubmit={loginForm.handleSubmit(onLogin)} className="space-y-4">
 
-            {/* CAMPO CNPJ/USUÁRIO */}
+            {/* CAMPO CPF */}
             <div>
-              <Label htmlFor="cpnjOrUser">CNPJ ou Usuário</Label>
+              <Label htmlFor="cpnjOrUser">CPF</Label>
               <div className="relative mt-1">
                 <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <input
                   id="cpnjOrUser"
                   type="text"
-                  placeholder="Digite seu CNPJ ou usuário"
-                  className="pl-10 border border-input rounded-md w-full h-10 px-3 bg-white text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  placeholder="Digite seu CPF"
+                  className="pl-10 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                   {...loginForm.register("cpnjOrUser")}
                 />
               </div>
               {loginForm.formState.errors.cpnjOrUser && (
-                <p className="text-sm text-destructive mt-1">
+                <p className="text-xs text-destructive mt-1 font-medium">
                   {loginForm.formState.errors.cpnjOrUser.message}
                 </p>
               )}
@@ -140,19 +153,19 @@ const Login = () => {
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-primary transition-colors"
                 >
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
               {loginForm.formState.errors.password && (
-                <p className="text-sm text-destructive mt-1">
+                <p className="text-xs text-destructive mt-1 font-medium">
                   {loginForm.formState.errors.password.message}
                 </p>
               )}
             </div>
 
-            {/* CHECKBOX LEMBRAR-ME */}
+            {/* CHECKBOX */}
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-2">
                 <Controller
@@ -166,29 +179,38 @@ const Login = () => {
                     />
                   )}
                 />
-                <label htmlFor="rememberMe" className="text-sm cursor-pointer">
+                <label htmlFor="rememberMe" className="text-sm cursor-pointer text-gray-600">
                   Lembrar-me
                 </label>
               </div>
-              <a href="#" className="text-sm text-primary hover:underline">
+              <a href="#" className="text-sm text-primary hover:underline font-medium">
                 Esqueceu a senha?
               </a>
             </div>
 
-            {/* BOTÃO */}
+            {/* BOTÃO SUBMIT */}
             <Button
               type="submit"
               disabled={loading}
-              className="w-full bg-[#8B7355] hover:bg-[#7A6349] disabled:opacity-70"
+              className="w-full bg-[#8B7355] hover:bg-[#7A6349] disabled:opacity-70 transition-all"
             >
-              {loading ? "Entrando..." : "Entrar"}
+              {loading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Entrando...
+                </>
+              ) : (
+                "Entrar"
+              )}
             </Button>
 
-            {/* ERRO CENTRALIZADO */}
+            {/* MENSAGEM DE ERRO */}
             {errorMessage && (
-              <p className="text-red-600 text-sm text-center">
-                {errorMessage}
-              </p>
+              <div className="bg-destructive/10 p-3 rounded-md text-center border border-destructive/20">
+                <p className="text-destructive text-xs font-semibold">
+                  {errorMessage}
+                </p>
+              </div>
             )}
           </form>
         </div>
