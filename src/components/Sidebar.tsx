@@ -1,4 +1,4 @@
-import { useState } from "react"; // Importação separada do hook useState
+import { useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { LayoutDashboard, Search, Package, FileText, Settings, Menu, X } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -14,13 +14,33 @@ const menuItems = [
 export const Sidebar = () => {
   const location = useLocation();
   const [isOpen, setIsOpen] = useState(false);
+  
+  // Estado para guardar os dados do usuário real
+  const [usuario, setUsuario] = useState({ nome: "Visitante", email: "Sem acesso" });
 
-  // Função para fechar o menu ao clicar em um item (útil em mobile)
+  // --- EFEITO PARA CARREGAR USUÁRIO ---
+  useEffect(() => {
+    // Busca os dados que salvamos no Login.tsx
+    const dadosSalvos = localStorage.getItem("usuario_logado");
+    
+    if (dadosSalvos) {
+      try {
+        const userObj = JSON.parse(dadosSalvos);
+        setUsuario(userObj);
+      } catch (e) {
+        console.error("Erro ao ler dados do usuário", e);
+      }
+    }
+  }, []);
+
   const handleLinkClick = () => {
     if (isOpen) {
       setIsOpen(false);
     }
   };
+
+  // Pega a primeira letra do nome para o avatar
+  const inicial = usuario.nome ? usuario.nome.charAt(0).toUpperCase() : "U";
 
   return (
     <>
@@ -45,10 +65,8 @@ export const Sidebar = () => {
       <aside
         className={cn(
           "bg-[#1a4d2e] min-h-screen flex flex-col fixed top-0 left-0 z-50 transition-transform duration-300 ease-in-out",
-          "w-[250px] lg:w-[250px]", // Largura maior em mobile para melhor toque, e a largura original em desktop
-          // Oculta por padrão em mobile e visível em desktop
+          "w-[250px] lg:w-[250px]", 
           "transform -translate-x-full lg:translate-x-0",
-          // Mostra quando isOpen é true em mobile
           isOpen && "translate-x-0"
         )}
       >
@@ -74,7 +92,7 @@ export const Sidebar = () => {
               <Link
                 key={item.path}
                 to={item.path}
-                onClick={handleLinkClick} // Adiciona o fechamento do menu ao clicar
+                onClick={handleLinkClick}
                 className={cn(
                   "flex items-center gap-3 px-6 py-3 text-sm transition-colors",
                   isActive
@@ -89,21 +107,27 @@ export const Sidebar = () => {
           })}
         </nav>
 
-        {/* Rodapé do Usuário */}
+        {/* Rodapé do Usuário DINÂMICO */}
         <div className="p-6 border-t border-green-800">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 bg-white rounded-full flex items-center justify-center">
-              <span className="text-[#1a4d2e] text-xs font-semibold">U</span>
+              {/* Mostra a inicial do nome real */}
+              <span className="text-[#1a4d2e] text-xs font-semibold">{inicial}</span>
             </div>
-            <div>
-              <p className="text-white text-sm font-medium">Usuário</p>
-              <p className="text-green-300 text-xs">operador</p>
+            <div className="overflow-hidden">
+              {/* Mostra o Nome vindo do Banco */}
+              <p className="text-white text-sm font-medium truncate w-[140px]" title={usuario.nome}>
+                {usuario.nome}
+              </p>
+              {/* Mostra o Email ou CPF vindo do Banco */}
+              <p className="text-green-300 text-xs truncate w-[140px]" title={usuario.email}>
+                {usuario.email || "Administrador"}
+              </p>
             </div>
           </div>
         </div>
       </aside>
       
-      {/* Adiciona um espaço de padding no corpo da página para evitar que o conteúdo fique por baixo da sidebar em desktop */}
       <div className="hidden lg:block lg:w-[170px] flex-shrink-0" />
     </>
   );
