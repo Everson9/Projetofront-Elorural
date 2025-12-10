@@ -1,4 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
+// IMPORTANTE: Importar useLocation
+import { useLocation } from "react-router-dom";
 import { Sidebar } from "@/components/Sidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -14,10 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 
-// --- CONFIGURAÇÃO DA API ---
-// Se quiser voltar para local, comente a linha do Render e descomente a do localhost
-// const API_URL = "http://localhost:8080/api/alertas"; 
-const API_URL = "https://elo-rural-backend.onrender.com/api/alertas"; // <--- RENDER ATIVADO
+const API_URL = "https://elo-rural-backend.onrender.com/api/alertas"; 
 
 interface Alerta {
   id: number;
@@ -30,6 +29,8 @@ interface Alerta {
 
 export default function Controle() {
   const { toast } = useToast();
+  // HOOK PARA LER O ESTADO DA NAVEGAÇÃO
+  const location = useLocation();
   
   const [alertas, setAlertas] = useState<Alerta[]>([]);
 
@@ -38,7 +39,6 @@ export default function Controle() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   
-  // Formulário
   const [formData, setFormData] = useState({
     tipo_alerta: "temperatura",
     mensagem: "",
@@ -47,32 +47,46 @@ export default function Controle() {
     lote_fk: ""
   });
 
-  // --- DASHBOARD CALCULATIONS ---
   const stats = useMemo(() => {
     const total = alertas.length;
     const ativos = alertas.filter(a => a.status === 'ativo').length;
     const resolvidos = alertas.filter(a => a.status === 'resolvido').length;
-    
     const temperatura = alertas.filter(a => a.tipo_alerta === 'temperatura').length;
     const umidade = alertas.filter(a => a.tipo_alerta === 'umidade').length;
     const validade = alertas.filter(a => a.tipo_alerta === 'validade').length;
-
     const taxaResolucao = total > 0 ? Math.round((resolvidos / total) * 100) : 0;
-
     return { total, ativos, resolvidos, temperatura, umidade, validade, taxaResolucao };
   }, [alertas]);
 
-  // --- FETCH DADOS ---
   useEffect(() => {
     fetchAlertas();
   }, []);
 
   const fetchAlertas = async () => {
     try {
-      const response = await fetch(API_URL); // Usa a constante definida lá em cima
+      const response = await fetch(API_URL);
       if (response.ok) {
         const data = await response.json();
         setAlertas(data);
+
+        // --- LÓGICA DE ABERTURA AUTOMÁTICA ---
+        // Verifica se veio algum ID do Dashboard
+        const state = location.state as { openAlertId?: number };
+        
+        if (state?.openAlertId) {
+          // Procura o alerta na lista que acabamos de baixar
+          const targetAlert = data.find((a: Alerta) => a.id === state.openAlertId);
+          
+          if (targetAlert) {
+            // Abre o modal
+            setSelectedAlert(targetAlert);
+            
+            // Limpa o estado para não reabrir se der F5
+            window.history.replaceState({}, document.title);
+          }
+        }
+        // -------------------------------------
+
       } else {
         toast({ title: "Erro", description: "Falha ao carregar dados.", variant: "destructive" });
       }
@@ -81,7 +95,10 @@ export default function Controle() {
     }
   };
 
-  // --- VISUAL UTILS ---
+  // ... RESTO DO CÓDIGO PERMANECE IGUAL (getIcon, getStatusColor, handleSave, handleDelete...)
+  // Copie as funções auxiliares e o Return do código anterior, eles não mudam.
+  // Vou colocar aqui apenas para garantir que não quebre, mas é igual ao anterior.
+
   const getIcon = (tipo: string) => {
     switch (tipo) {
       case "temperatura": return <Thermometer className="h-5 w-5 text-orange-500" />;
@@ -97,7 +114,6 @@ export default function Controle() {
       : "text-green-700 bg-green-50 border-green-200";
   };
 
-  // --- ACTIONS ---
   const handleOpenCreate = () => {
     setEditingId(null);
     setFormData({ tipo_alerta: "temperatura", mensagem: "", data_emissao: new Date().toISOString().split('T')[0], status: "ativo", lote_fk: "" });
@@ -130,14 +146,12 @@ export default function Controle() {
     try {
       let response;
       if (editingId) {
-        // UPDATE (PUT)
         response = await fetch(`${API_URL}/${editingId}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload)
         });
       } else {
-        // CREATE (POST)
         response = await fetch(API_URL, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -158,9 +172,7 @@ export default function Controle() {
   const handleDelete = async () => {
     if (!selectedAlert) return;
     try {
-      // DELETE
       await fetch(`${API_URL}/${selectedAlert.id}`, { method: "DELETE" });
-      
       setAlertas(prev => prev.filter(a => a.id !== selectedAlert?.id));
       setSelectedAlert(null);
       toast({ title: "Excluído", description: "Registro removido." });
@@ -174,7 +186,6 @@ export default function Controle() {
       <Sidebar />
       <main className="flex-1 p-6 lg:ml-[90px]">
         <div className="w-full space-y-6">
-          
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center pb-2 border-b">
             <div>
               <h1 className="text-2xl font-bold text-foreground">Monitoramento de Alertas</h1>
@@ -272,7 +283,7 @@ export default function Controle() {
           </div>
         </div>
 
-        {/* MODAIS (MANTIDOS IGUAIS) */}
+        {/* MODAL DETALHES */}
         <Dialog open={!!selectedAlert} onOpenChange={(open) => !open && setSelectedAlert(null)}>
           <DialogContent className="max-w-md rounded-sm">
             <DialogHeader>
@@ -298,6 +309,7 @@ export default function Controle() {
           </DialogContent>
         </Dialog>
 
+        {/* MODAL FORMULÁRIO */}
         <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
           <DialogContent className="max-w-md rounded-sm">
             <DialogHeader><DialogTitle>{editingId ? "Editar Alerta" : "Novo Alerta"}</DialogTitle><DialogDescription>Preencha os dados.</DialogDescription></DialogHeader>

@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+// IMPORTANTE: Importar useNavigate
+import { useNavigate } from "react-router-dom"; 
 import { Sidebar } from "@/components/Sidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TrendingUp, AlertTriangle, Package, Thermometer, Droplets, Clock, CheckCircle2 } from "lucide-react";
@@ -28,6 +30,9 @@ const germinationData = [
 ];
 
 const Dashboard = () => {
+  // HOOK DE NAVEGAÇÃO
+  const navigate = useNavigate();
+
   const [stockData, setStockData] = useState<{ month: string; estoque: number; distribuido: number }[]>([]);
   const [recentAlerts, setRecentAlerts] = useState<Alerta[]>([]);
   
@@ -42,7 +47,6 @@ const Dashboard = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // --- 1. BUSCA DADOS DE LOTES ---
         const responseLotes = await fetch('https://elo-rural-backend.onrender.com/lote');
         const dataLotes = await responseLotes.json();
         const dados = dataLotes.dados || {};
@@ -54,12 +58,10 @@ const Dashboard = () => {
           distribuido: dados.Distribuidos ? (dados.Distribuidos[mes] ?? 0) : 0,
         }));
 
-        // --- 2. BUSCA DADOS DE ALERTAS ---
         const responseAlertas = await fetch('https://elo-rural-backend.onrender.com/api/alertas');
         const dataAlertas: Alerta[] = await responseAlertas.json();
 
         const ativos = dataAlertas.filter(a => a.status === 'ativo');
-        // Pega os 5 últimos
         const recentes = [...dataAlertas].sort((a, b) => b.id - a.id).slice(0, 5);
 
         setStockData(chartData);
@@ -99,6 +101,12 @@ const Dashboard = () => {
     }
   };
 
+  // FUNÇÃO PARA NAVEGAR LEVANDO O ID
+  const handleAlertClick = (alertId: number) => {
+    // Vamos para a rota /controle e levamos o ID na "bagagem" (state)
+    navigate("/controle", { state: { openAlertId: alertId } });
+  };
+
   return (
     <div className="flex min-h-screen bg-gray-50 relative">
       <Sidebar />
@@ -108,103 +116,43 @@ const Dashboard = () => {
           <p className="text-gray-600">Visão geral em tempo real</p>
         </div>
 
-        {/* --- CARDS DE KPI --- */}
-        {/* Mudei aqui de lg:grid-cols-4 para lg:grid-cols-3 para ficarem maiores e preencherem o espaço */}
+        {/* CARDS DE KPI (MANTIDOS IGUAIS) */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
-          
-          {/* TOTAL LOTES */}
           <Card className="bg-[#1a4d2e] text-white border-none">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-normal text-green-100 opacity-80">Total de Lotes</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center justify-between">
-                <p className="text-3xl font-bold">{loading ? "..." : kpis.totalLotes}</p>
-                <Package className="w-8 h-8 text-green-300 opacity-50" />
-              </div>
-            </CardContent>
+            <CardHeader className="pb-2"><CardTitle className="text-sm font-normal text-green-100 opacity-80">Total de Lotes</CardTitle></CardHeader>
+            <CardContent><div className="flex items-center justify-between"><p className="text-3xl font-bold">{loading ? "..." : kpis.totalLotes}</p><Package className="w-8 h-8 text-green-300 opacity-50" /></div></CardContent>
           </Card>
-
-          {/* ALERTAS ATIVOS */}
           <Card className={kpis.alertasAtivos > 0 ? "bg-red-700 text-white border-none" : "bg-[#1a4d2e] text-white border-none"}>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-normal text-white opacity-80">Alertas Ativos</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center justify-between">
-                <p className="text-3xl font-bold">{loading ? "..." : kpis.alertasAtivos}</p>
-                <AlertTriangle className="w-8 h-8 text-white opacity-50" />
-              </div>
-            </CardContent>
+            <CardHeader className="pb-2"><CardTitle className="text-sm font-normal text-white opacity-80">Alertas Ativos</CardTitle></CardHeader>
+            <CardContent><div className="flex items-center justify-between"><p className="text-3xl font-bold">{loading ? "..." : kpis.alertasAtivos}</p><AlertTriangle className="w-8 h-8 text-white opacity-50" /></div></CardContent>
           </Card>
-
-          {/* QUALIDADE */}
           <Card className="bg-[#1a4d2e] text-white border-none">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-normal text-green-100 opacity-80">Qualidade Média</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center justify-between">
-                <p className="text-3xl font-bold">{loading ? "..." : kpis.mediaQualidade.toFixed(1)}%</p>
-                <TrendingUp className="w-8 h-8 text-green-300 opacity-50" />
-              </div>
-            </CardContent>
+            <CardHeader className="pb-2"><CardTitle className="text-sm font-normal text-green-100 opacity-80">Qualidade Média</CardTitle></CardHeader>
+            <CardContent><div className="flex items-center justify-between"><p className="text-3xl font-bold">{loading ? "..." : kpis.mediaQualidade.toFixed(1)}%</p><TrendingUp className="w-8 h-8 text-green-300 opacity-50" /></div></CardContent>
           </Card>
-
         </div>
 
-        {/* --- GRÁFICOS --- */}
+        {/* GRÁFICOS (MANTIDOS IGUAIS) */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
           <Card className="min-w-0 shadow-sm border border-gray-200">
-            <CardHeader>
-              <CardTitle className="text-lg">Movimentação de Estoque</CardTitle>
-            </CardHeader>
+            <CardHeader><CardTitle className="text-lg">Movimentação de Estoque</CardTitle></CardHeader>
             <CardContent>
-              <ChartContainer
-                config={{
-                  estoque: { label: "Estoque", color: "#1a4d2e" },
-                  distribuido: { label: "Distribuído", color: "#C5A065" },
-                }}
-                className="h-[300px] w-full"
-              >
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={stockData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
-                    <XAxis dataKey="month" tickLine={false} axisLine={false} tickMargin={10} fontSize={12} />
-                    <YAxis tickLine={false} axisLine={false} fontSize={12} />
-                    <ChartTooltip cursor={{fill: '#f3f4f6'}} content={<ChartTooltipContent indicator="dot" />} />
-                    <Bar dataKey="estoque" fill="#1a4d2e" radius={[4, 4, 0, 0]} barSize={20} />
-                    <Bar dataKey="distribuido" fill="#C5A065" radius={[4, 4, 0, 0]} barSize={20} />
-                  </BarChart>
-                </ResponsiveContainer>
+              <ChartContainer config={{ estoque: { label: "Estoque", color: "#1a4d2e" }, distribuido: { label: "Distribuído", color: "#C5A065" }}} className="h-[300px] w-full">
+                <ResponsiveContainer width="100%" height="100%"><BarChart data={stockData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" /><XAxis dataKey="month" tickLine={false} axisLine={false} tickMargin={10} fontSize={12} /><YAxis tickLine={false} axisLine={false} fontSize={12} /><ChartTooltip cursor={{fill: '#f3f4f6'}} content={<ChartTooltipContent indicator="dot" />} /><Bar dataKey="estoque" fill="#1a4d2e" radius={[4, 4, 0, 0]} barSize={20} /><Bar dataKey="distribuido" fill="#C5A065" radius={[4, 4, 0, 0]} barSize={20} /></BarChart></ResponsiveContainer>
               </ChartContainer>
             </CardContent>
           </Card>
-
           <Card className="min-w-0 shadow-sm border border-gray-200">
-            <CardHeader>
-              <CardTitle className="text-lg">Taxa de Germinação (7 dias)</CardTitle>
-            </CardHeader>
+            <CardHeader><CardTitle className="text-lg">Taxa de Germinação (7 dias)</CardTitle></CardHeader>
             <CardContent>
-              <ChartContainer
-                config={{ rate: { label: "Taxa (%)", color: "#1a4d2e" } }}
-                className="h-[300px] w-full"
-              >
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={germinationData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
-                    <XAxis dataKey="day" tickLine={false} axisLine={false} tickMargin={10} fontSize={12} />
-                    <YAxis domain={[90, 100]} tickLine={false} axisLine={false} fontSize={12} />
-                    <ChartTooltip cursor={false} content={<ChartTooltipContent />} />
-                    <Line type="monotone" dataKey="rate" stroke="#1a4d2e" strokeWidth={3} dot={{ fill: "#1a4d2e", r: 4 }} activeDot={{ r: 6 }} />
-                  </LineChart>
-                </ResponsiveContainer>
+              <ChartContainer config={{ rate: { label: "Taxa (%)", color: "#1a4d2e" } }} className="h-[300px] w-full">
+                <ResponsiveContainer width="100%" height="100%"><LineChart data={germinationData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" /><XAxis dataKey="day" tickLine={false} axisLine={false} tickMargin={10} fontSize={12} /><YAxis domain={[90, 100]} tickLine={false} axisLine={false} fontSize={12} /><ChartTooltip cursor={false} content={<ChartTooltipContent />} /><Line type="monotone" dataKey="rate" stroke="#1a4d2e" strokeWidth={3} dot={{ fill: "#1a4d2e", r: 4 }} activeDot={{ r: 6 }} /></LineChart></ResponsiveContainer>
               </ChartContainer>
             </CardContent>
           </Card>
         </div>
 
-        {/* --- ALERTAS RECENTES --- */}
+        {/* --- LISTA DE ALERTAS (AGORA CLICÁVEL) --- */}
         <Card className="shadow-sm border border-gray-200">
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="text-lg">Alertas Recentes do Sistema</CardTitle>
@@ -222,15 +170,18 @@ const Dashboard = () => {
                 {recentAlerts.map((alert) => (
                   <div
                     key={alert.id}
-                    className="flex items-center gap-4 p-3 rounded-lg border border-gray-100 hover:bg-gray-50 transition-colors"
+                    // ADICIONADO: onClick para navegar
+                    onClick={() => handleAlertClick(alert.id)}
+                    // ADICIONADO: cursor-pointer e hover
+                    className="flex items-center gap-4 p-3 rounded-lg border border-gray-100 hover:bg-gray-100 hover:shadow-sm transition-all cursor-pointer group"
                   >
-                    <div className={`p-2 rounded-full ${getAlertColor(alert.tipo_alerta)}`}>
+                    <div className={`p-2 rounded-full ${getAlertColor(alert.tipo_alerta)} group-hover:scale-110 transition-transform`}>
                       {getAlertIcon(alert.tipo_alerta)}
                     </div>
                     
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
-                        <p className="font-semibold text-gray-900 text-sm">
+                        <p className="font-semibold text-gray-900 text-sm group-hover:text-[#8B7355] transition-colors">
                           {alert.tipo_alerta.charAt(0).toUpperCase() + alert.tipo_alerta.slice(1)}
                         </p>
                         {alert.status === 'ativo' && (
