@@ -9,6 +9,10 @@ import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 
+// --- URL DA API (Mude para localhost se for testar localmente) ---
+const API_URL = "https://elo-rural-backend.onrender.com/login"; 
+// const API_URL = "http://localhost:8080/login"; 
+
 // --- ESQUEMA DE VALIDAÇÃO ZOD ---
 const loginSchema = z.object({
   cpnjOrUser: z.string().nonempty("Campo obrigatório").trim(),
@@ -35,24 +39,23 @@ const Login = () => {
     setErrorMessage("");
 
     // 1. LIMPEZA DE DADOS
-    // Remove tudo que não for número (pontos e traços do CPF)
+    // Remove pontos e traços do CPF para enviar só números
     const loginLimpo = data.cpnjOrUser.replace(/\D/g, '');
 
     try {
       console.log("Enviando login:", { cpf: loginLimpo });
 
-      // 2. CONEXÃO COM O RENDER
-      const response = await fetch("https://elo-rural-backend.onrender.com/login", {
+      // 2. CONEXÃO COM A API
+      const response = await fetch(API_URL, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          // Envia o CPF limpo (só números)
+          // Backend espera 'cpf' limpo
           cpf: loginLimpo, 
           
-          // Envia a senha. 
-          // IMPORTANTE: Se continuar dando erro, troque 'password' por 'senha' aqui embaixo 👇
+          // Backend espera 'senha' (em português, conforme seu DTO Java)
           senha: data.password 
         }),
       });
@@ -66,15 +69,25 @@ const Login = () => {
       const result = await response.json();
       console.log("Login bem-sucedido:", result);
 
-      // 3. SALVAR TOKEN E REDIRECIONAR
-      // Verifica se o backend retornou o token (pode ser 'token' ou 'accessToken')
+      // 3. SALVAR DADOS NO NAVEGADOR (Local Storage)
       const token = result.token || result.accessToken;
       
       if (token) {
+        // Salva o Token de Acesso
         localStorage.setItem("token", token);
+        
+        // 👇 A CORREÇÃO MÁGICA ESTÁ AQUI 👇
+        // Salva os dados do usuário (nome, email, etc) para a Sidebar usar
+        if (result.dados) {
+            localStorage.setItem("usuario_logado", JSON.stringify(result.dados));
+        }
+        
         navigate("/dashboard");
       } else {
-        // Se logou mas não veio token (estranho, mas acontece), redireciona mesmo assim
+        // Fallback: Se não veio token mas veio sucesso
+        if (result.dados) {
+            localStorage.setItem("usuario_logado", JSON.stringify(result.dados));
+        }
         navigate("/dashboard");
       }
 
@@ -165,7 +178,7 @@ const Login = () => {
               )}
             </div>
 
-            {/* CHECKBOX */}
+            {/* CHECKBOX LEMBRAR-ME */}
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-2">
                 <Controller
